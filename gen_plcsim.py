@@ -1172,46 +1172,281 @@ PLC_CANVAS_METHODS = [
 ]
 
 # ── MainWindow class ──────────────────────────────────────────────────────────
-SAMPLE_IL = """// Mitsubishi MELSEC IL Sample Program
-// Rung 1: Timer demo - X0 starts T0, T0 energizes Y0
+SAMPLE_IL = """// === Program 1: Basic I/O (Timer, Counter, Latch) ===
+// X0: start T0 timer (1s), T0 -> Y0
+// X1: pulse C0 counter (target 5), C0 -> Y1
+// X2: reset counter C0
+// X3: SET M0 latch, X4: RST M0 latch, M0 -> Y2
+// X5: when on, add D0+D1 -> D2 (use Set Reg to set D0/D1)
+// Comparison contact: D2>K100 -> Y3
+
 LD X0
 OUT T0 K10
+
 LD T0
 OUT Y0
 
-// Rung 2: Counter demo - X1 pulses C0, C0 energizes Y1
 LD X1
 OUT C0 K5
+
 LD C0
 OUT Y1
 
-// Rung 3: Reset counter on X2
 LD X2
 RST C0
 
-// Rung 4: Latch - X3 sets M0, X4 resets M0, M0 drives Y2
 LD X3
 SET M0
+
 LD X4
 RST M0
+
 LD M0
 OUT Y2
 
-// Rung 5: Math example - D0 + D1 -> D2
 LD X5
 ADD D0 D1 D2
 
-// Rung 6: Comparison - if D2 > K100 then Y3
 LD> D2 K100
 OUT Y3
 
 END"""
+
+SAMPLE_IL_2 = """// === Program 2: Arithmetic & Compare ===
+// X0: load D0=25, D1=10; compute D2..D5
+//   D2=D0+D1=35  D3=D0-D1=15  D4=D0*D1=250  D5=D0/D1=2
+// X1: INC D6 each scan
+// X2: DEC D7 each scan
+// CMP D0 D1 M0 -> M0=(D0>D1), M1=(D0=D1), M2=(D0<D1)
+// Y0/Y1/Y2 reflect compare result
+
+LD X0
+MOV K25 D0
+
+LD X0
+MOV K10 D1
+
+LD X0
+ADD D0 D1 D2
+
+LD X0
+SUB D0 D1 D3
+
+LD X0
+MUL D0 D1 D4
+
+LD X0
+DIV D0 D1 D5
+
+LD X1
+INC D6
+
+LD X2
+DEC D7
+
+CMP D0 D1 M0
+
+LD M0
+OUT Y0
+
+LD M1
+OUT Y1
+
+LD M2
+OUT Y2
+
+END"""
+
+SAMPLE_IL_3 = """// === Program 3: Stack Operations (MPS/MRD/MPP) ===
+// X0 is master; X1->Y0, X2->Y1, X3->Y2, direct->Y3
+// MPS saves X0 state; MRD peeks for each branch; MPP pops last
+
+LD X0
+MPS
+AND X1
+OUT Y0
+MRD
+AND X2
+OUT Y1
+MRD
+AND X3
+OUT Y2
+MPP
+OUT Y3
+
+// Rung 2: X4 master; X5 -> SET M1, NOT X5 -> RST M1
+LD X4
+MPS
+AND X5
+SET M1
+MPP
+ANI X5
+RST M1
+
+LD M1
+OUT Y4
+
+// Rung 3: three outputs share one condition (X0)
+LD X0
+MPS
+MOV K100 D0
+MRD
+MOV K200 D1
+MPP
+ADD D0 D1 D2
+
+END"""
+
+SAMPLE_IL_4 = """// === Program 4: Bit & Word Operations ===
+// Use Set Reg to set D0 to a value (e.g. D0=0)
+// X0: set bit 4 of D0  (OR with 16)
+// X1: clear bit 4 of D0
+// X2: test bit 4 -> M0 -> Y0
+// X3: D1 = D0 AND K255  (lower byte mask)
+// X4: D2 = D0 OR K256   (force bit 8 high)
+// X5: shift/rotate on D3..D6
+
+LD X0
+BSET D0 K4
+
+LD X1
+BCLR D0 K4
+
+LD X2
+BTEST D0 K4 M0
+
+LD M0
+OUT Y0
+
+LD X3
+MOV K255 D10
+WAND D0 D10 D1
+
+LD X4
+MOV K256 D11
+WOR D0 D11 D2
+
+LD X5
+MOV K3 D3
+SHL D3 K2
+
+LD X5
+MOV K12 D4
+SHR D4 K2
+
+LD X5
+MOV K1 D5
+ROL D5 K1
+
+LD X5
+MOV K2 D6
+ROR D6 K1
+
+END"""
+
+SAMPLE_IL_5 = """// === Program 5: Subroutines & Conditional Jumps ===
+// Set D0=10 D1=20 via Set Reg first
+// X0: CALL subroutine 1 -> D2=D0+D1=30, D3=D0*D1=200
+// X1: CJ P2 - when ON, skips MOV K999 D5
+// X2: JMP P3 - when ON, skips MOV K888 D6
+
+LD X0
+CALL P1
+
+LD> D2 K0
+OUT Y0
+
+LD X1
+CJ P2
+
+LD X0
+MOV K999 D5
+
+2:
+
+LD X2
+JMP P3
+
+LD X0
+MOV K888 D6
+
+3:
+
+LD X0
+OUT Y1
+
+FEND
+
+// Subroutine 1: D2 = D0+D1, D3 = D0*D1
+1:
+ADD D0 D1 D2
+MUL D0 D1 D3
+RET
+
+END"""
+
+SAMPLE_IL_6 = """// === Program 6: Timer & Counter Patterns ===
+// X0: on-delay timer T0 (1 second=K10) -> Y0
+// X1: auto-repeat oscillator T1 (2s) -> Y1 pulses
+// X2: count presses -> C0 target 5 -> Y2
+// X3: reset C0
+// X4: falling edge of X4 sets M2 -> Y3; X5 clears it
+
+LD X0
+OUT T0 K10
+
+LD T0
+OUT Y0
+
+LD X1
+ANI T1
+OUT T1 K20
+
+LD T1
+OUT Y1
+
+LD X2
+OUT C0 K5
+
+LD X3
+RST C0
+
+LD C0
+OUT Y2
+
+LDF X4
+SET M2
+
+LD X5
+RST M2
+
+LD M2
+OUT Y3
+
+END"""
+
+SAMPLES = [SAMPLE_IL, SAMPLE_IL_2, SAMPLE_IL_3, SAMPLE_IL_4, SAMPLE_IL_5, SAMPLE_IL_6]
+SAMPLE_NAMES = [
+    "1: Basic I/O (Timer/Counter/Latch)",
+    "2: Arithmetic (ADD/SUB/MUL/DIV/CMP)",
+    "3: Stack (MPS/MRD/MPP)",
+    "4: Bit & Word Ops (BSET/SHL/WAND)",
+    "5: Subroutines & Jumps (CALL/CJ/JMP)",
+    "6: Timer & Counter Patterns",
+]
+
+def make_xojo_str(text):
+    """Embed multi-line text as a Xojo string concatenation."""
+    lines = text.strip().split('\n')
+    parts = ['"' + l.replace('\\', '\\\\').replace('"', '\\"') + '"' for l in lines]
+    return ' + EndOfLine + '.join(parts)
 
 MAIN_WINDOW_PROPS = [
     prop_def('Engine',     'PLCEngine'),
     prop_def('ScanTimer',  'Timer'),
     prop_def('LDView',     'PLCCanvas'),
     prop_def('ILEdit',     'DesktopTextArea'),
+    prop_def('SampleMenu', 'DesktopPopupMenu'),
     prop_def('RegList',    'DesktopTextArea'),
     prop_def('SetRegField','DesktopTextField'),
     prop_def('StatusLbl',  'DesktopLabel'),
@@ -1359,12 +1594,31 @@ MAIN_WINDOW_EVENTS = [
         'LDView.LockBottom = True',
         'Self.AddControl(LDView)',
         '',
+        '// ── Sample selector ───────────────────────────────',
+        'SampleMenu = New DesktopPopupMenu',
+        'SampleMenu.Left = 902',
+        'SampleMenu.Top = TB',
+        'SampleMenu.Width = 354',
+        'SampleMenu.Height = 34',
+] + [
+        'SampleMenu.AddRow "%s"' % n for n in SAMPLE_NAMES
+] + [
+        'Self.AddControl(SampleMenu)',
+        'Dim loadSmpBtn As New DesktopButton',
+        'loadSmpBtn.Caption = "Load Sample"',
+        'loadSmpBtn.Left = 1260',
+        'loadSmpBtn.Top = TB',
+        'loadSmpBtn.Width = 138',
+        'loadSmpBtn.Height = 34',
+        'Self.AddControl(loadSmpBtn)',
+        'AddHandler loadSmpBtn.Pressed, AddressOf LoadSample_Pressed',
+        '',
         '// ── IL Editor ─────────────────────────────────────',
         'ILEdit = New DesktopTextArea',
         'ILEdit.Left = 902',
-        'ILEdit.Top = TB',
+        'ILEdit.Top = TB + 40',
         'ILEdit.Width = 498',
-        'ILEdit.Height = 550',
+        'ILEdit.Height = 510',
         'ILEdit.Multiline = True',
         'ILEdit.LockRight = True',
         'ILEdit.LockTop = True',
@@ -1462,6 +1716,16 @@ MAIN_WINDOW_METHODS = [
     ]),
     method('UpdateRegisters', '', '', [
         'RegList.Text = Engine.GetRegisterDump',
+    ]),
+    method('GetSample', 'idx As Integer', 'String',
+        ['Select Case idx'] +
+        sum([['Case %d' % i, '  Return %s' % make_xojo_str(s)] for i, s in enumerate(SAMPLES)], []) +
+        ['End Select', 'Return ""']
+    ),
+    method('LoadSample_Pressed', 'sender As DesktopButton', '', [
+        'Engine.Initialize',
+        'ILEdit.Text = GetSample(SampleMenu.SelectedRowIndex)',
+        'LoadCurrentProgram',
     ]),
     method('ApplySetReg', '', '', [
         'Dim input As String = SetRegField.Text.Trim',
