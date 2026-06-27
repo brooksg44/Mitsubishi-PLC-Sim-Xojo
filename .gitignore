@@ -1,0 +1,11 @@
+# Test/scratch project files
+Test*.xojo_binary_project
+App.xojo_binary_code
+*_v2.xojo_binary_project
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
