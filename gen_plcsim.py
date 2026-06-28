@@ -1062,13 +1062,13 @@ PLC_CANVAS_EVENTS = [
         '        branchOpen = False',
         '      End If',
         '    Case "MPS"',
-        '      // Stack push - just a junction dot',
         '      g.DrawingColor = &c001080',
         '      g.FillOval(cx - 4, y + RUNG_H\\2 - 4, 8, 8)',
+        '      g.DrawText("MPS", cx - 12, y + RUNG_H\\2 + 14)',
         '    Case "MRD","MPP"',
-        '      // Stack read/pop - junction dot',
         '      g.DrawingColor = &c001080',
         '      g.FillOval(cx - 4, y + RUNG_H\\2 - 4, 8, 8)',
+        '      g.DrawText(op, cx - 12, y + RUNG_H\\2 + 14)',
         '    Case "OUT","OUTP"',
         '      // Output coil',
         '      Dim ost As Boolean = If(Engine <> Nil, Engine.GetBit(ins.GetRegType, ins.RegIndex), False)',
@@ -1085,7 +1085,7 @@ PLC_CANVAS_EVENTS = [
         '    Case "MOV","MOVP","ADD","ADDP","SUB","SUBP","MUL","MULP","DIV","DIVP","CMP","INC","INCP","DEC","DECP","BSET","BCLR","BTEST","SHL","SHLP","SHR","SHRP","ROL","ROLP","ROR","RORP","WAND","WANDP","WOR","WORP","WXOR","WXORP","CML","CALL","CJ","JMP","MC","MCR"',
         '      DrawFBElement(g, COIL_X - ELEM_W, y + RUNG_H\\2 - ELEM_H, ELEM_W*2, ELEM_H*2, op, o1, ins.Operand2, ins.Operand3)',
         '      lastCoilIdx = k',
-        '    Case "END","FEND","NOP","LABEL"',
+        '    Case "END","FEND","NOP","LABEL","RET"',
         '      lastCoilIdx = k',
         '      k = k + 1',
         '      Exit While',
@@ -1299,13 +1299,13 @@ ADD D0 D1 D2
 END"""
 
 SAMPLE_IL_4 = """// === Program 4: Bit & Word Operations ===
-// Use Set Reg to set D0 to a value (e.g. D0=0)
-// X0: set bit 4 of D0  (OR with 16)
+// Use Set Reg to set D0 first (e.g. D0=100)
+// X0: set bit 4 of D0
 // X1: clear bit 4 of D0
-// X2: test bit 4 -> M0 -> Y0
+// X2: test bit 4 of D0 -> M0 -> Y0
 // X3: D1 = D0 AND K255  (lower byte mask)
 // X4: D2 = D0 OR K256   (force bit 8 high)
-// X5: shift/rotate on D3..D6
+// X5: shifts and rotates on D3..D6
 
 LD X0
 BSET D0 K4
@@ -1320,27 +1320,21 @@ LD M0
 OUT Y0
 
 LD X3
-MOV K255 D10
-WAND D0 D10 D1
+WAND D0 K255 D1
 
 LD X4
-MOV K256 D11
-WOR D0 D11 D2
+WOR D0 K256 D2
 
 LD X5
-MOV K3 D3
 SHL D3 K2
 
 LD X5
-MOV K12 D4
 SHR D4 K2
 
 LD X5
-MOV K1 D5
 ROL D5 K1
 
 LD X5
-MOV K2 D6
 ROR D6 K1
 
 END"""
@@ -1380,8 +1374,12 @@ FEND
 
 // Subroutine 1: D2 = D0+D1, D3 = D0*D1
 1:
+LD X0
 ADD D0 D1 D2
+
+LD X0
 MUL D0 D1 D3
+
 RET
 
 END"""
