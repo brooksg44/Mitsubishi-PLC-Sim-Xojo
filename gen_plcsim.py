@@ -354,17 +354,6 @@ PLC_ENGINE_METHODS = [
         'HasEnded = False',
     ]),
     method('BeginScan', '', '', [
-        '// Save previous bit states for edge detection',
-        'Dim i As Integer',
-        'For i = 0 To %d' % (MAX_X-1),
-        '  XPrev(i) = XBits(i)',
-        'Next',
-        'For i = 0 To %d' % (MAX_Y-1),
-        '  YPrev(i) = YBits(i)',
-        'Next',
-        'For i = 0 To %d' % (MAX_M-1),
-        '  MPrev(i) = MBits(i)',
-        'Next',
         '// Clear output shadow',
         'For i = 0 To %d' % (MAX_Y-1),
         '  YShadow(i) = False',
@@ -403,6 +392,17 @@ PLC_ENGINE_METHODS = [
         '  CPrevCoil(i) = CCoil(i)',
         'Next',
         'ScanCount = ScanCount + 1',
+        '// Save state for edge detection AFTER scan outputs are settled',
+        'Dim j As Integer',
+        'For j = 0 To %d' % (MAX_X-1),
+        '  XPrev(j) = XBits(j)',
+        'Next',
+        'For j = 0 To %d' % (MAX_Y-1),
+        '  YPrev(j) = YBits(j)',
+        'Next',
+        'For j = 0 To %d' % (MAX_M-1),
+        '  MPrev(j) = MBits(j)',
+        'Next',
     ]),
     method('GetBit', 'rt As String, idx As Integer', 'Boolean', [
         'Select Case rt',
@@ -1081,7 +1081,11 @@ PLC_CANVAS_EVENTS = [
         '      Dim ost As Boolean = If(Engine <> Nil, Engine.GetBit(ins.GetRegType, ins.RegIndex), False)',
         '      DrawCoilElement(g, COIL_X, y + RUNG_H\\2 - ELEM_H\\2, ELEM_W, ELEM_H, "R:" + o1, ost, True)',
         '      lastCoilIdx = k',
-        '    Case "MOV","ADD","SUB","MUL","DIV","CMP","INC","DEC"',
+        '    Case "MOV","MOVP","ADD","ADDP","SUB","SUBP","MUL","MULP","DIV","DIVP",',
+        '         "CMP","INC","INCP","DEC","DECP",',
+        '         "BSET","BCLR","BTEST","SHL","SHLP","SHR","SHRP",',
+        '         "ROL","ROLP","ROR","RORP","WAND","WANDP","WOR","WORP",',
+        '         "WXOR","WXORP","CML","CALL","CJ","JMP","MC","MCR"',
         '      DrawFBElement(g, COIL_X - ELEM_W, y + RUNG_H\\2 - ELEM_H, ELEM_W*2, ELEM_H*2, op, o1, ins.Operand2, ins.Operand3)',
         '      lastCoilIdx = k',
         '    Case "END","FEND","NOP","LABEL"',
@@ -1094,7 +1098,9 @@ PLC_CANVAS_EVENTS = [
         '    // Start new rung on next LD/LDI after an output',
         '    If k <= n Then',
         '      Dim nop As String = Engine.Instructions(k).OpCode',
-        '      If (nop = "LD" Or nop = "LDI" Or nop = "LDP" Or nop = "LDF" Or nop.Left(2) = "LD") And lastCoilIdx >= 0 Then',
+        '      If (nop.Left(2) = "LD") And lastCoilIdx >= 0 Then',
+        '        Exit While',
+        '      ElseIf nop = "MRD" Or nop = "MPP" Then',
         '        Exit While',
         '      End If',
         '    End If',
@@ -1244,15 +1250,13 @@ INC D6
 LD X2
 DEC D7
 
-CMP D0 D1 M0
-
-LD M0
+LD> D0 D1
 OUT Y0
 
-LD M1
+LD= D0 D1
 OUT Y1
 
-LD M2
+LD< D0 D1
 OUT Y2
 
 END"""
