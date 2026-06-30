@@ -41,7 +41,7 @@
 │  │  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  │   │
 │  │  │ Toolbar  │  │PLCCanvas │  │   ILEditor        │  │   │
 │  │  │ Buttons  │  │(Ladder   │  │ (DesktopTextArea) │  │   │
-│  │  │ X0–X5    │  │ Diagram) │  │                   │  │   │
+│  │  │ X0–X15   │  │ Diagram) │  │                   │  │   │
 │  │  └────┬─────┘  └────┬─────┘  └───────┬───────────┘  │   │
 │  │       │              │                 │              │   │
 │  │       │         ┌────▼─────┐    LoadProgram()       │   │
@@ -277,7 +277,7 @@ Edge detection functions comparing current bit state against previous-scan snaps
 
 #### Method: `GetRegisterDump()` → `String`
 
-Generates a human-readable text dump of all registers (X0–X15, Y0–Y15, M0–M15, T0–T7 with PV/CV/DN, C0–C7 with PV/CV/DN, D0–D15). Displayed in the `RegList` text area.
+Generates a compact human-readable text dump of all registers (X0–X15, Y0–Y15, M0–M15, T0–T7 with PV/CV/DN, C0–C7 with PV/CV/DN, D0–D15). Displayed in the `RegList` text area.
 
 ---
 
@@ -298,7 +298,7 @@ The `Paint` event is entirely procedural — no offscreen buffer or retained sce
 3. **Draws power rails** — two vertical blue bars (4px wide) on left and right edges.
 4. **Iterates instructions** to identify rungs:
    - A rung starts at an `LD*` instruction.
-   - A rung ends at the first `OUT`/`SET`/`RST`/`END`/`FEND`/`NOP`/`LABEL`/`RET` encountered, or when the next instruction is another `LD*`/`MRD`/`MPP`.
+   - A rung ends at the first `OUT`/`SET`/`RST`/`END`/`FEND`/`NOP`/`LABEL`/`RET` encountered, or when the next instruction is another `LD*`. `MRD`/`MPP` keep the current rung open so stack branches render as one Mitsubishi-style branch group.
 5. **For each rung,** draws a horizontal bus line and iterates through its instructions, dispatching to draw helpers.
 
 #### Drawing Constants
@@ -329,7 +329,7 @@ The `Paint` event is entirely procedural — no offscreen buffer or retained sce
 
 #### MPS/MRD/MPP Visualization
 
-Drawn as small filled circles on the rung bus with text labels ("MPS", "MRD", "MPP") below.
+The ladder renderer hides stack instructions and draws the equivalent Mitsubishi-style branch structure. `MPS/MRD/MPP` output stacks branch from the saved logic point, `MPS ... ORB` draws block-OR branches, and `MPS ... ANB` acts as a block separator for series-connected logic groups.
 
 #### Scrolling
 
@@ -352,7 +352,7 @@ Drawn as small filled circles on the rung bus with text labels ("MPS", "MRD", "M
 ┌──────────────────────────────────────────────────────────────────┐
 │ TOOLBAR (50px)                                                    │
 │ [Load IL] [▶ RUN] [■ STOP] [» STEP] [↺ RESET]  STOP  Scan: 0   │
-│   [▲][▼]  Inputs: [X0][X1][X2][X3][X4][X5]                       │
+│   [▲][▼]  Inputs: [X0][X1]...[X7] / [X8][X9]...[X15]             │
 ├──────────────────────────┬───────────────────────────────────────┤
 │ PLCCanvas                │ Sample: [▼ PopupMenu     ] [Load]    │
 │ (Ladder Diagram)         │ ILEdit (DesktopTextArea)              │
@@ -360,11 +360,11 @@ Drawn as small filled circles on the rung bus with text labels ("MPS", "MRD", "M
 │                          │                                       │
 │                          │                                       │
 ├──────────────────────────┴───────────────────────────────────────┤
-│ Set Reg (e.g. D0=100, X0=1): [____________] [Set]               │
+│ Set Reg (e.g. D0=100, X0=1): [ bordered input ] [Set]           │
 ├──────────────────────────────────────────────────────────────────┤
-│ RegList (DesktopTextArea, ReadOnly) — 1400 × 178                 │
-│ === INPUT BITS (X) ===                                           │
-│ X0=0 X1=0 ...                                                    │
+│ RegList (DesktopTextArea, ReadOnly) — 1400 × 420                 │
+│ X: X0=0 X1=0 ...                                                 │
+│ D: D0=0 D1=0 ...                                                 │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -380,11 +380,11 @@ Drawn as small filled circles on the rung bus with text labels ("MPS", "MRD", "M
 | `StatusLbl` | — | Displays "RUN", "STOP", or "RESET" |
 | `ScanLbl` | — | Displays "Scan: N" |
 | `▲` / `▼` buttons | `ScrollUp_Pressed` / `ScrollDown_Pressed` | Adjusts `LDView.ScrollY` by ±140px |
-| `X0`–`X5` toggle buttons | `X0_Pressed` … `X5_Pressed` | Toggles `Engine.XBits(n)` (XOR flip) |
+| `X0`–`X15` toggle buttons | `XInput_Pressed` | Toggles `Engine.XBits(n)` (XOR flip) and refreshes the LD/register views |
 
 #### Sample Menu
 
-A `DesktopPopupMenu` with 6 pre-built example programs. The `Load Sample` button (`LoadSample_Pressed`) re-initializes the engine, loads the selected sample text into `ILEdit`, and parses it.
+A `DesktopPopupMenu` with 9 pre-built example programs. The `Load Sample` button (`LoadSample_Pressed`) re-initializes the engine, loads the selected sample text into `ILEdit`, and parses it.
 
 #### IL Editor (`ILEdit`)
 
@@ -607,6 +607,9 @@ User types IL code in ILEdit
 | 4 | Bit & Word Ops (BSET/SHL/WAND) | `BSET`, `BCLR`, `BTEST`, `WAND`, `WOR`, `SHL`, `SHR`, `ROL`, `ROR` |
 | 5 | Subroutines & Jumps (CALL/CJ/JMP) | `CALL P1`, `RET`, `CJ P2`, `JMP P3`, `FEND`, labels |
 | 6 | Timer & Counter Patterns | On-delay timer, oscillator (`ANI T1 → OUT T1`), counter with reset, `LDF` falling edge |
+| 7 | 3-Wire Motor Control | START/STOP seal-in circuit with overload interlock |
+| 8 | Block OR (ORB) | `ORB` for two series branches in parallel |
+| 9 | Block AND (ANB) | `ANB` for two parallel groups in series |
 
 ---
 
@@ -619,7 +622,7 @@ Outputs are written to `YShadow` during the scan and copied to `YBits` only in `
 Timers increment by 1 each scan tick. With a 100ms scan timer, `K10` = 1 second. This is a simplification — real Mitsubishi PLCs use hardware timers with millisecond precision. The code does **not** account for scan-time variation.
 
 ### 3. Counter Edge Detection
-Counters increment only on the **rising edge** of the coil signal (detected via `CPrevCoil`). This matches standard PLC counter behavior where each pulse must transition OFF→ON to count.
+Counters increment only on the **rising edge** of the coil signal (detected via `CPrevCoil`). This matches standard PLC counter behavior where each pulse must transition OFF→ON to count. `RST Cn` clears the current value and done bit while preserving the current coil state for edge detection, so holding the count input ON during reset does not immediately add a count.
 
 ### 4. Power-Flow Gating for Application Instructions
 Instructions like `MOV`, `ADD`, `SUB`, etc. check `If acc Then` before executing. This means they only fire when the logical chain leading to them evaluates to True, exactly like function blocks on a ladder rung.

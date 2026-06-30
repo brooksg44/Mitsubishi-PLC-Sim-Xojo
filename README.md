@@ -13,7 +13,7 @@ A desktop PLC simulator for **Xojo 2026 Release 1.2** that implements the Mitsub
 - **Ladder Diagram renderer** — live graphical LD view with power-flow highlighting, scrollable via ▲/▼ toolbar buttons
 - **IL editor** — editable IL source with Load button to parse and reload
 - **Run / Stop / Step / Reset** controls with configurable scan timer
-- **Input toggles** — X0–X5 push-button toggles for simulating field inputs
+- **Input toggles** — X0–X15 push-button toggles for simulating field inputs
 - **Register monitor** — read-only scrollable text panel showing all X, Y, M, T, C, D register values, updated every scan
 - **Set Register input** — type `D0=100`, `X0=1`, `M5=0`, etc. and click **Set** to write any register mid-simulation
 
@@ -28,49 +28,60 @@ A desktop PLC simulator for **Xojo 2026 Release 1.2** that implements the Mitsub
 | C0–C7    | Word  | Counter current values |
 | D0–D127  | Word  | Data registers (16-bit) |
 
-## Sample program
+## Sample programs
 
-The simulator loads a built-in 6-rung sample program on startup:
+The simulator loads Program 1 on startup and includes 9 built-in sample programs in the **Load Sample** menu:
+
+| # | Title | Key Instructions Demonstrated |
+|---|---|---|
+| 1 | Basic I/O (Timer/Counter/Latch) | `OUT T0`, `OUT C0`, `SET`/`RST M0`, `ADD`, `LD>` |
+| 2 | Arithmetic (ADD/SUB/MUL/DIV/CMP) | `MOV`, `ADD`, `SUB`, `MUL`, `DIV`, `INC`, `DEC`, comparison contacts |
+| 3 | Stack (MPS/MRD/MPP) | `MPS`, `MRD`, `MPP` with multiple output branches |
+| 4 | Bit & Word Ops (BSET/SHL/WAND) | `BSET`, `BCLR`, `BTEST`, `WAND`, `WOR`, `SHL`, `SHR`, `ROL`, `ROR` |
+| 5 | Subroutines & Jumps (CALL/CJ/JMP) | `CALL P1`, `RET`, `CJ P2`, `JMP P3`, `FEND`, labels |
+| 6 | Timer & Counter Patterns | On-delay timer, oscillator (`ANI T1` -> `OUT T1`), counter with reset, `LDF` falling edge |
+| 7 | 3-Wire Motor Control | START/STOP seal-in circuit with overload interlock |
+| 8 | Block OR (ORB) | `ORB` for two series branches in parallel |
+| 9 | Block AND (ANB) | `ANB` for two parallel groups in series |
+
+Program 1:
 
 ```
-// Rung 1: Basic latching circuit
-LD  X0
-OR  Y0
-ANI X1
+// === Program 1: Basic I/O (Timer, Counter, Latch) ===
+// X0: start T0 timer (1s), T0 -> Y0
+// X1: pulse C0 counter (target 5), C0 -> Y1
+// X2: reset counter C0
+// X3: SET M0 latch, X4: RST M0 latch, M0 -> Y2
+// X5: when on, add D0+D1 -> D2 (use Set Reg to set D0/D1)
+// Comparison contact: D2>K100 -> Y3
+
+LD X0
+OUT T0 K10
+
+LD T0
 OUT Y0
 
-// Rung 2: Timer - 5s delay on Y1 when X2 is on
-LD  X2
-OUT T0 K50
-
-LD  T0
-OUT Y1
-
-// Rung 3: Counter - count X3 pulses, energise Y2 at 5
-LDP X3
+LD X1
 OUT C0 K5
 
-LD  C0
+LD C0
+OUT Y1
+
+LD X2
+RST C0
+
+LD X3
+SET M0
+
+LD X4
+RST M0
+
+LD M0
 OUT Y2
 
-// Rung 4: Math - D0 = D1 + D2
-LD  M0
-MOV K10 D1
-MOV K20 D2
-ADD D1 D2
-MOV D0 D0
+LD X5
+ADD D0 D1 D2
 
-// Rung 5: Set/Reset latching
-LD  X4
-SET M1
-
-LD  X5
-RST M1
-
-LD  M1
-OUT Y3
-
-// Rung 6: Comparison - if D2 > K100 then Y3
 LD> D2 K100
 OUT Y3
 
@@ -106,7 +117,7 @@ Requires Python 3.6+ (no third-party packages).
 | **Step** | Execute one scan cycle manually |
 | **Reset** | Clear all registers and reload the program |
 | **▲ / ▼** | Scroll the Ladder Diagram view |
-| **X0–X5** | Toggle digital input bits |
+| **X0–X15** | Toggle digital input bits |
 | **Set Reg** | Write a value — type `D0=100` then click **Set** |
 
 ## Architecture
