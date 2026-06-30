@@ -5,6 +5,7 @@ OrigIDEVersion=20260102
 Class=App;App.xojo_code;&h000000000E4019FF;&h0000000000000000;false
 Class=PLCInstruction;PLCInstruction.xojo_code;&h0000000003338EFF;&h0000000000000000;false
 Class=PLCEngine;PLCEngine.xojo_code;&h000000005EEB21FF;&h0000000000000000;false
+Class=PLCEngineTests;PLCEngineTests.xojo_code;&h000000006B5D43FF;&h0000000000000000;false
 Class=PLCCanvas;PLCCanvas.xojo_code;&h0000000023342AFF;&h0000000000000000;false
 Class=SamplePrograms;SamplePrograms.xojo_code;&h0000000065A128FF;&h0000000000000000;false
 DesktopWindow=MainWindow;MainWindow.xojo_window;&h000000001F589EFF;&h0000000000000000;false

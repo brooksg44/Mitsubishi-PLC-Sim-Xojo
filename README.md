@@ -122,6 +122,17 @@ Requires Python 3.6+ (no third-party packages).
 | **X0–X15** | Toggle digital input bits |
 | **Set Reg** | Write a value — type `D0=100` then click **Set** |
 
+## Engine tests
+
+The text project includes a lightweight `PLCEngineTests` class for smoke-testing the simulator core. To run it from the Xojo debugger or Immediate pane:
+
+```xojo
+Dim tests As New PLCEngineTests
+MessageBox(tests.RunAll)
+```
+
+The suite covers basic output writes, timer done contacts, counter rising-edge behavior, arithmetic/comparison instructions, `ORB` branch logic, and `CALL`/`FEND` subroutine flow.
+
 ## Architecture
 
 | File | Description |
@@ -139,6 +150,7 @@ Requires Python 3.6+ (no third-party packages).
 - **PLCCanvas** — `DesktopCanvas` subclass that renders the Ladder Diagram
 - **MainWindow** — top-level window with toolbar, IL editor, LD view, and register monitor
 - **SamplePrograms** — built-in sample IL program names and source text
+- **PLCEngineTests** — lightweight smoke tests for the simulator core
 
 ## Requirements
 
