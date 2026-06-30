@@ -3,6 +3,20 @@ Test*.xojo_binary_project
 App.xojo_binary_code
 *_v2.xojo_binary_project
 
+# Xojo generated/local artifacts
+Builds - MitsubishiPLCSim/
+*.xojo_uistate
+.MitsubishiPLCSim.xojo_uistate
+*_orig.xojo_binary_project
+*_save.xojo_binary_project
+
+# Exported reference PDFs
+App.pdf
+MainWindow.pdf
+PLCCanvas.pdf
+PLCEngine.pdf
+PLCInstruction.pdf
+
 # macOS
 .DS_Store
 
