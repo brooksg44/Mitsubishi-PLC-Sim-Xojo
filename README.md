@@ -113,7 +113,7 @@ Requires Python 3.6+ (no third-party packages).
 
 | Control | Action |
 |---------|--------|
-| **Load** | Parse the IL editor text and reload the simulator |
+| **Load** | Parse and validate the IL editor text, then reload the simulator |
 | **Run** | Start continuous scan (100 ms cycle) |
 | **Stop** | Halt scanning |
 | **Step** | Execute one scan cycle manually |
@@ -131,7 +131,18 @@ Dim tests As New PLCEngineTests
 MessageBox(tests.RunAll)
 ```
 
-The suite covers basic output writes, timer done contacts, counter rising-edge behavior, arithmetic/comparison instructions, `ORB` branch logic, and `CALL`/`FEND` subroutine flow.
+The suite covers basic output writes, timer done contacts, counter rising-edge behavior, arithmetic/comparison instructions, `ORB` branch logic, `CALL`/`FEND` subroutine flow, and validation errors.
+
+## Program validation
+
+`PLCEngine.LoadProgram` records line-numbered validation errors for common IL mistakes:
+
+- unknown opcodes
+- missing operands
+- invalid bit or word operand shapes
+- unresolved labels in `CJ`, `JMP`, and `CALL`
+
+When validation errors are present, the UI shows the errors in the register monitor and blocks Run/Step until the program is fixed and reloaded.
 
 ## Architecture
 

@@ -3,8 +3,13 @@ Protected Class PLCInstruction
 	#tag Method, Flags = &h0
 		Sub Constructor(line As String)
 		  Dim parts() As String
-		  parts = line.Trim.Split(" ")
+		  Dim rawParts() As String
+		  rawParts = line.Trim.Split(" ")
+		  For Each part As String In rawParts
+		      If part.Trim <> "" Then parts.Append(part.Trim)
+		  Next
 		  Dim n As Integer = UBound(parts)
+		  If n < 0 Then Return
 		  OpCode = parts(0).Uppercase
 		  If n >= 1 Then Operand1 = parts(1).Uppercase
 		  If n >= 2 Then Operand2 = parts(2).Uppercase

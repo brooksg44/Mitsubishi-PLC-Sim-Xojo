@@ -1,6 +1,13 @@
 #tag Class
 Protected Class PLCEngine
 	#tag Method, Flags = &h0
+		Sub AddValidationError(lineNo As Integer, message As String)
+		  Dim displayLine As Integer = lineNo + 1
+		  ValidationErrors.Append("Line " + displayLine.ToString + ": " + message)
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
 		Sub BeginScan()
 		  // Clear output shadow
 		  Dim i As Integer
@@ -506,6 +513,12 @@ Protected Class PLCEngine
 	#tag EndMethod
 
 	#tag Method, Flags = &h0
+		Function HasValidationErrors() As Boolean
+		  Return UBound(ValidationErrors) >= 0
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
 		Sub Initialize()
 		  ReDim XBits(2047)
 		  ReDim YBits(2047)
@@ -536,7 +549,115 @@ Protected Class PLCEngine
 		  IsRunning = False
 		  HasEnded = False
 		  LabelMap = New Dictionary
+		  ReDim ValidationErrors(-1)
 		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function IsBitOperand(op As String) As Boolean
+		  If op = "" Then Return False
+		  
+		  Dim prefix As String = RegisterPrefix(op)
+		  Dim suffix As String = op.Mid(prefix.Length + 1)
+		  If suffix = "" Or Not IsDecimalDigits(suffix) Then Return False
+		  
+		  Select Case prefix
+		  Case "X","Y","M","T","C","SM"
+		      Return True
+		  End Select
+		  
+		  Return False
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function IsDecimalDigits(value As String) As Boolean
+		  If value = "" Then Return False
+		  
+		  Dim i As Integer
+		  For i = 1 To value.Length
+		      Dim ch As String = value.Mid(i, 1)
+		      If ch < "0" Or ch > "9" Then Return False
+		  Next
+		  
+		  Return True
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function IsHexDigits(value As String) As Boolean
+		  If value = "" Then Return False
+		  
+		  Dim i As Integer
+		  For i = 1 To value.Length
+		      Dim ch As String = value.Mid(i, 1).Uppercase
+		      If (ch < "0" Or ch > "9") And (ch < "A" Or ch > "F") Then Return False
+		  Next
+		  
+		  Return True
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function IsSupportedOp(op As String) As Boolean
+		  Select Case op
+		  Case "LD","LDI","LDP","LDF","AND","ANI","ANDP","ANDF","OR","ORI","ORP","ORF"
+		      Return True
+		  Case "ANB","ORB","MPS","MRD","MPP"
+		      Return True
+		  Case "OUT","OUTP","SET","RST"
+		      Return True
+		  Case "LD=","LD<>","LD<","LD>","LD<=","LD>=","AND=","AND<>","AND<","AND>","AND<=","AND>=","OR=","OR<>","OR<","OR>","OR<=","OR>="
+		      Return True
+		  Case "MOV","MOVP","ADD","ADDP","SUB","SUBP","MUL","MULP","DIV","DIVP","INC","INCP","DEC","DECP"
+		      Return True
+		  Case "BSET","BCLR","BTEST","WAND","WANDP","WOR","WORP","WXOR","WXORP","CML","SHL","SHLP","SHR","SHRP","ROL","ROLP","ROR","RORP","CMP"
+		      Return True
+		  Case "CJ","JMP","CALL","RET","MC","MCR","FEND","END","NOP","LABEL"
+		      Return True
+		  End Select
+		  
+		  Return False
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function IsWordDestination(op As String) As Boolean
+		  If op = "" Then Return False
+		  
+		  Dim prefix As String = RegisterPrefix(op)
+		  Dim suffix As String = op.Mid(prefix.Length + 1)
+		  If suffix = "" Or Not IsDecimalDigits(suffix) Then Return False
+		  
+		  Select Case prefix
+		  Case "D","Z"
+		      Return True
+		  End Select
+		  
+		  Return False
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function IsWordOperand(op As String) As Boolean
+		  If op = "" Then Return False
+		  
+		  Dim prefix As String = RegisterPrefix(op)
+		  Dim suffix As String = op.Mid(prefix.Length + 1)
+		  If suffix = "" Then Return False
+		  If prefix = "H" Then
+		      If Not IsHexDigits(suffix) Then Return False
+		  Else
+		      If Not IsDecimalDigits(suffix) Then Return False
+		  End If
+		  
+		  Select Case prefix
+		  Case "K","H","D","T","C","Z","R"
+		      Return True
+		  End Select
+		  
+		  Return False
+		End Function
 	#tag EndMethod
 
 	#tag Method, Flags = &h0
@@ -544,6 +665,7 @@ Protected Class PLCEngine
 		  Dim lines() As String
 		  lines = ilText.Split(EndOfLine)
 		  ReDim Instructions(-1)
+		  ReDim ValidationErrors(-1)
 		  LabelMap = New Dictionary
 		  Dim lineNo As Integer = 0
 		  For Each line As String In lines
@@ -564,9 +686,11 @@ Protected Class PLCEngine
 		      If instr.IsLabel Then
 		          LabelMap.Value(instr.LabelName) = UBound(Instructions) + 1
 		      End If
+		      ValidateInstruction(instr)
 		      Instructions.Append(instr)
 		      lineNo = lineNo + 1
 		  Next
+		  ValidateLabelReferences
 		  StkPtr = 0
 		  MCPtr = 0
 		  SubPtr = 0
@@ -597,6 +721,30 @@ Protected Class PLCEngine
 		      Return GetWord("D", suf.ToInteger)
 		  End Select
 		  Return op.ToInteger
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function RegisterPrefix(op As String) As String
+		  If op.Left(2) = "SM" Then Return "SM"
+		  Return op.Left(1)
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function RequiredOperandCount(op As String) As Integer
+		  Select Case op
+		  Case "ANB","ORB","MPS","MRD","MPP","RET","FEND","END","NOP","LABEL"
+		      Return 0
+		  Case "LD","LDI","LDP","LDF","AND","ANI","ANDP","ANDF","OR","ORI","ORP","ORF","OUT","OUTP","SET","RST","INC","INCP","DEC","DECP","CJ","JMP","CALL","MCR"
+		      Return 1
+		  Case "LD=","LD<>","LD<","LD>","LD<=","LD>=","AND=","AND<>","AND<","AND>","AND<=","AND>=","OR=","OR<>","OR<","OR>","OR<=","OR>=","MOV","MOVP","BSET","BCLR","CML","SHL","SHLP","SHR","SHRP","ROL","ROLP","ROR","RORP","MC"
+		      Return 2
+		  Case "ADD","ADDP","SUB","SUBP","MUL","MULP","DIV","DIVP","CMP","BTEST","WAND","WANDP","WOR","WORP","WXOR","WXORP"
+		      Return 3
+		  End Select
+		  
+		  Return -1
 		End Function
 	#tag EndMethod
 
@@ -637,6 +785,94 @@ Protected Class PLCEngine
 		      If idx >= 0 And idx <= 7 Then ZReg(idx) = v
 		  End Select
 		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Sub ValidateInstruction(instr As PLCInstruction)
+		  Dim op As String = instr.OpCode
+		  If Not IsSupportedOp(op) Then
+		      AddValidationError(instr.LineNumber, "unknown opcode '" + op + "'")
+		      Return
+		  End If
+		  
+		  Dim required As Integer = RequiredOperandCount(op)
+		  If required >= 1 And instr.Operand1 = "" Then
+		      AddValidationError(instr.LineNumber, op + " requires operand 1")
+		      Return
+		  End If
+		  If required >= 2 And instr.Operand2 = "" Then
+		      AddValidationError(instr.LineNumber, op + " requires operand 2")
+		      Return
+		  End If
+		  If required >= 3 And instr.Operand3 = "" Then
+		      AddValidationError(instr.LineNumber, op + " requires operand 3")
+		      Return
+		  End If
+		  
+		  Select Case op
+		  Case "LD","LDI","LDP","LDF","AND","ANI","ANDP","ANDF","OR","ORI","ORP","ORF","OUT","OUTP","SET","RST"
+		      If Not IsBitOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects a bit operand, got '" + instr.Operand1 + "'")
+		  Case "LD=","LD<>","LD<","LD>","LD<=","LD>=","AND=","AND<>","AND<","AND>","AND<=","AND>=","OR=","OR<>","OR<","OR>","OR<=","OR>="
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word operand 1, got '" + instr.Operand1 + "'")
+		      If Not IsWordOperand(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects word operand 2, got '" + instr.Operand2 + "'")
+		  Case "MOV","MOVP"
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word source, got '" + instr.Operand1 + "'")
+		      If Not IsWordDestination(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects D/Z destination, got '" + instr.Operand2 + "'")
+		  Case "ADD","ADDP","SUB","SUBP","MUL","MULP","DIV","DIVP"
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word operand 1, got '" + instr.Operand1 + "'")
+		      If Not IsWordOperand(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects word operand 2, got '" + instr.Operand2 + "'")
+		      If Not IsWordDestination(instr.Operand3) Then AddValidationError(instr.LineNumber, op + " expects D/Z destination, got '" + instr.Operand3 + "'")
+		  Case "WAND","WANDP","WOR","WORP","WXOR","WXORP"
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word operand 1, got '" + instr.Operand1 + "'")
+		      If Not IsWordOperand(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects word operand 2, got '" + instr.Operand2 + "'")
+		      If Not IsWordDestination(instr.Operand3) Then AddValidationError(instr.LineNumber, op + " expects D/Z destination, got '" + instr.Operand3 + "'")
+		  Case "CML"
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word source, got '" + instr.Operand1 + "'")
+		      If Not IsWordDestination(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects D/Z destination, got '" + instr.Operand2 + "'")
+		  Case "INC","INCP","DEC","DECP","SHL","SHLP","SHR","SHRP","ROL","ROLP","ROR","RORP","BSET","BCLR"
+		      If Not IsWordDestination(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects D/Z destination operand 1, got '" + instr.Operand1 + "'")
+		      If required >= 2 And Not IsWordOperand(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects word operand 2, got '" + instr.Operand2 + "'")
+		  Case "CMP"
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word operand 1, got '" + instr.Operand1 + "'")
+		      If Not IsWordOperand(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects word operand 2, got '" + instr.Operand2 + "'")
+		      If Not IsBitOperand(instr.Operand3) Then AddValidationError(instr.LineNumber, op + " expects bit result base operand 3, got '" + instr.Operand3 + "'")
+		  Case "BTEST"
+		      If Not IsWordOperand(instr.Operand1) Then AddValidationError(instr.LineNumber, op + " expects word operand 1, got '" + instr.Operand1 + "'")
+		      If Not IsWordOperand(instr.Operand2) Then AddValidationError(instr.LineNumber, op + " expects word bit index operand 2, got '" + instr.Operand2 + "'")
+		      If Not IsBitOperand(instr.Operand3) Then AddValidationError(instr.LineNumber, op + " expects bit destination operand 3, got '" + instr.Operand3 + "'")
+		  End Select
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Sub ValidateLabelReferences()
+		  Dim i As Integer
+		  For i = 0 To UBound(Instructions)
+		      Dim instr As PLCInstruction = Instructions(i)
+		      Select Case instr.OpCode
+		      Case "CJ","JMP","CALL"
+		          Dim lbl As String = instr.Operand1
+		          If lbl <> "" Then
+		              If lbl.Left(1) = "P" Then lbl = lbl.Mid(2)
+		              If Not LabelMap.HasKey(lbl) Then AddValidationError(instr.LineNumber, instr.OpCode + " references unknown label '" + instr.Operand1 + "'")
+		          End If
+		      End Select
+		  Next
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Function ValidationSummary() As String
+		  If Not HasValidationErrors Then Return ""
+		  
+		  Dim result As String = "Program validation errors:" + EndOfLine
+		  Dim i As Integer
+		  For i = 0 To UBound(ValidationErrors)
+		      result = result + "- " + ValidationErrors(i) + EndOfLine
+		  Next
+		  
+		  Return result
+		End Function
 	#tag EndMethod
 
 
@@ -734,6 +970,10 @@ Protected Class PLCEngine
 
 	#tag Property, Flags = &h0
 		TPreset() As Integer
+	#tag EndProperty
+
+	#tag Property, Flags = &h0
+		ValidationErrors() As String
 	#tag EndProperty
 
 	#tag Property, Flags = &h0

@@ -35,9 +35,10 @@ Protected Class PLCEngineTests
 		  TestArithmeticAndCompare(failures)
 		  TestOrbBranch(failures)
 		  TestCallAndFend(failures)
+		  TestValidationErrors(failures)
 		  
 		  If UBound(failures) < 0 Then
-		      Return "PLCEngine tests passed: 6"
+		      Return "PLCEngine tests passed: 7"
 		  End If
 		  
 		  Dim failureCount As Integer = UBound(failures) + 1
@@ -163,6 +164,20 @@ Protected Class PLCEngineTests
 		  engine.SetBit("X", 3, True)
 		  engine.ExecuteScan
 		  AssertBool("ORB second branch", engine.GetBit("Y", 0), True, failures)
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h0
+		Sub TestValidationErrors(failures() As String)
+		  Dim program As String = "LD X0" + EndOfLine + _
+		      "BOGUS Y0" + EndOfLine + _
+		      "ADD D0 K1" + EndOfLine + _
+		      "CALL P99" + EndOfLine + _
+		      "END"
+		  Dim engine As PLCEngine = NewEngine(program)
+		  
+		  AssertBool("Validation detects errors", engine.HasValidationErrors, True, failures)
+		  AssertInteger("Validation error count", UBound(engine.ValidationErrors) + 1, 3, failures)
 		End Sub
 	#tag EndMethod
 

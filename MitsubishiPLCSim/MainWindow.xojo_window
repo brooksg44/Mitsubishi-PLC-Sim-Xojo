@@ -280,7 +280,11 @@ End
 		  Engine.LoadProgram(ILEdit.Text)
 		  LDView.Refresh
 		  UpdateRegisters
-		  StatusLbl.Text = "STOP  (" + CStr(UBound(Engine.Instructions)) + "+1 instr)"
+		  If Engine.HasValidationErrors Then
+		      StatusLbl.Text = "ERRORS: " + CStr(UBound(Engine.ValidationErrors) + 1)
+		  Else
+		      StatusLbl.Text = "STOP  (" + CStr(UBound(Engine.Instructions)) + "+1 instr)"
+		  End If
 		End Sub
 	#tag EndMethod
 
@@ -299,12 +303,23 @@ End
 		  LDView.Refresh
 		  UpdateRegisters
 		  ScanLbl.Text = "Scan: 0"
-		  StatusLbl.Text = "RESET"
+		  If Engine.HasValidationErrors Then
+		      StatusLbl.Text = "ERRORS: " + CStr(UBound(Engine.ValidationErrors) + 1)
+		  Else
+		      StatusLbl.Text = "RESET"
+		  End If
 		End Sub
 	#tag EndMethod
 
 	#tag Method, Flags = &h0
 		Sub RunBtn_Pressed(sender As DesktopButton)
+		  If Engine.HasValidationErrors Then
+		      Engine.IsRunning = False
+		      ScanTimer.Mode = 0
+		      StatusLbl.Text = "FIX ERRORS"
+		      UpdateRegisters
+		      Return
+		  End If
 		  Engine.IsRunning = True
 		  ScanTimer.Mode = 2
 		  StatusLbl.Text = "RUN"
@@ -350,6 +365,11 @@ End
 
 	#tag Method, Flags = &h0
 		Sub StepBtn_Pressed(sender As DesktopButton)
+		  If Engine.HasValidationErrors Then
+		      StatusLbl.Text = "FIX ERRORS"
+		      UpdateRegisters
+		      Return
+		  End If
 		  Engine.ExecuteScan
 		  LDView.Refresh
 		  UpdateRegisters
@@ -367,7 +387,11 @@ End
 
 	#tag Method, Flags = &h0
 		Sub UpdateRegisters()
-		  RegList.Text = Engine.GetRegisterDump
+		  If Engine.HasValidationErrors Then
+		      RegList.Text = Engine.ValidationSummary
+		  Else
+		      RegList.Text = Engine.GetRegisterDump
+		  End If
 		End Sub
 	#tag EndMethod
 
